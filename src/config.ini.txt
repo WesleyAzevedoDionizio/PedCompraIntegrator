@@ -1,0 +1,1 @@
+eco_ini_path=C:\ecosis\windows\eco.ini
