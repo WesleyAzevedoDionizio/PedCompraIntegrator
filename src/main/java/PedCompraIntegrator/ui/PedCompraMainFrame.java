@@ -1,31 +1,67 @@
 package PedCompraIntegrator.ui;
 
+import PedCompraIntegrator.config.EcoDbConnector;
+import PedCompraIntegrator.dao.EmpresaDAO;
+import PedCompraIntegrator.dao.FornecedorDAO;
+import PedCompraIntegrator.dto.EcoDbConfig;
+import PedCompraIntegrator.dto.Empresa;
+import PedCompraIntegrator.dto.Fornecedor;
+import PedCompraIntegrator.dto.ProdutoDTO;
+import PedCompraIntegrator.service.ExcelReader;
+
 import javax.swing.*;
 import javax.swing.border.Border;
 import javax.swing.border.EmptyBorder;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
+import javax.swing.filechooser.FileNameExtensionFilter;
 import java.awt.*;
+import java.awt.event.KeyAdapter;
+import java.awt.event.KeyEvent;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.io.File;
+import java.nio.file.Path;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.util.List;
 
 
 public class PedCompraMainFrame extends JFrame {
 
+    private Connection con;
+
+    public PedCompraMainFrame() {};
+
+    public PedCompraMainFrame(Connection con) {
+        this.con = con;
+        initComponents();
+        bindActions();
+        buildLayout();
+        bindActions();
+        listarEmpresas();
+    }
+
     // Campos da tela.
+    private final JPopupMenu popUpFornecedor = new JPopupMenu();
+    private final DefaultListModel<Fornecedor> modelFornecedores = new DefaultListModel<>();
+    private final JList<Fornecedor> listFornecedores = new JList<>(modelFornecedores);
+
+    private final DefaultComboBoxModel<Empresa> modelEmpresas = new DefaultComboBoxModel<>();
+
     private final JTextField tfFornecedor = new JTextField();
-    private final JTextField tfEmpresaOrigem = new JTextField();
+   // private final JComboBox cbEmpresaOrigem = new JComboBox();
+    private final JComboBox<Empresa> cbEmpresaOrigem = new JComboBox<>();
     private final JTextField tfCaminhoPlanilha = new JTextField();
     private final JTextField tfEmailFornecedor = new JTextField();
+
 
     private final JButton btProcurarPlanilha = new  JButton("Procurar...");
     private final JButton btProcessar = new JButton("Processar");
 
     private final JLabel lbStatus = new JLabel("Preencha os campos para iniciar.");
 
-    public PedCompraMainFrame() {
-        initFrame();
-        initComponents();
-        buildLayout();
-        bindActions();
-    }
+
 
     private JLabel createLabel(String texto) {
         JLabel label = new JLabel(texto);
@@ -56,16 +92,53 @@ public class PedCompraMainFrame extends JFrame {
         // Placeholders:
         // texto de dica que aparece no campo enquanto ele está vazio.
         tfFornecedor.putClientProperty("JTextField.placeholdertext", "Ex: Fornecedor:XPTO");
-        tfEmpresaOrigem.putClientProperty("JTextField.placeholdertext", "EX: 01");
+        cbEmpresaOrigem.putClientProperty("JTextField.placeholdertext", "EX: 01");
         tfCaminhoPlanilha.putClientProperty("JTextField.placeholdertext", "Selecione a planilha...");
         tfEmailFornecedor.putClientProperty("JTextField.placeholdertext", "Ex: compras@fornecedor.com");
 
         // roundRect:
         // propriedade do FlatLaf para deixar o campo com cantos arredondados.
         tfFornecedor.putClientProperty("JComponent.roundRect", true);
-        tfEmpresaOrigem.putClientProperty("JComponent.roundRect", true);
+        cbEmpresaOrigem.putClientProperty("JComponent.roundRect", true);
         tfCaminhoPlanilha.putClientProperty("JComponent.roundRect", true);
         tfEmailFornecedor.putClientProperty("JComponent.roundRect", true);
+
+        listFornecedores.setFocusable(false);
+        listFornecedores.setFixedCellHeight(28);
+        listFornecedores.setVisibleRowCount(5);
+        listFornecedores.setCellRenderer((list, value, index, isSelected, cellHasFocus) -> {
+            JLabel label = new JLabel(value.toString());
+            label.setBorder(BorderFactory.createEmptyBorder(6, 10, 6, 10));
+            label.setOpaque(true);
+
+            if (isSelected) {
+                label.setBackground(list.getSelectionBackground());
+                label.setForeground(list.getSelectionForeground());
+            } else {
+                label.setBackground(list.getBackground());
+                label.setForeground(list.getForeground());
+            }
+
+            return label;
+        });
+        //popUpFornecedor.putClientProperty("FlatLaf.style", "arc:16");
+        popUpFornecedor.putClientProperty("FlatLaf.style", ""
+                + "arc:16;"
+                + "borderWidth:1;"
+                + "focusWidth:0;"
+        );
+        popUpFornecedor.setBorder(BorderFactory.createEmptyBorder());
+
+
+        JScrollPane scroll = new JScrollPane(listFornecedores);
+        //scroll.putClientProperty("FlatLaf.style", "arc:16");
+        scroll.setBorder(BorderFactory.createEmptyBorder());
+        scroll.putClientProperty("JComponent.roundRect", true);
+        scroll.putClientProperty("FlatLaf.style", ""
+                + "arc:16;"
+                + "focusWidth:0;"
+        );
+        popUpFornecedor.add(scroll);
 
         // O campo de caminho será preenchido pelo seletor de arquivo.
         // Então o usuário não precisa digitar nele manualmente.
@@ -74,7 +147,7 @@ public class PedCompraMainFrame extends JFrame {
         // Define um tamanho visual mais padrão para os campos.
         Dimension fieldSize = new Dimension(320, 38);
         tfFornecedor.setPreferredSize(fieldSize);
-        tfEmpresaOrigem.setPreferredSize(fieldSize);
+        cbEmpresaOrigem.setPreferredSize(fieldSize);
         tfCaminhoPlanilha.setPreferredSize(fieldSize);
         tfEmailFornecedor.setPreferredSize(fieldSize);
 
@@ -127,7 +200,7 @@ public class PedCompraMainFrame extends JFrame {
         // GridBagConstraints é o objeto que controla a posição dos componentes
         // dentro do GridBagLayout.
         GridBagConstraints gbc = new GridBagConstraints();
-        gbc.insets = new Insets(8, 8, 8, 8); // Insets = margens externas de cada componente.
+        gbc.insets = new Insets(6, 6, 6, 4); // Insets = margens externas de cada componente.
         gbc.fill = GridBagConstraints.HORIZONTAL;// fill = faz o componente crescer horizontalmente.
         gbc.weightx = 1.0;// weightx = diz quanto o componente pode expandir no eixo horizontal.
 
@@ -145,7 +218,7 @@ public class PedCompraMainFrame extends JFrame {
         formPanel.add(createLabel("Empresa origem:"), gbc);
 
         gbc.gridx = 1;
-        formPanel.add(tfEmpresaOrigem, gbc);
+        formPanel.add(cbEmpresaOrigem, gbc);
 
         // Linha 2 - Caminho da planilha
         gbc.gridx = 0;
@@ -193,12 +266,136 @@ public class PedCompraMainFrame extends JFrame {
 
         btProcurarPlanilha.addActionListener(e -> escolherPlanilha());
         btProcessar.addActionListener(e -> processarFormulario());
+
+        tfFornecedor.getDocument().addDocumentListener(new DocumentListener() {
+
+            private void aoMudar(){
+                String texto = tfFornecedor.getText();
+
+                buscarFornecedor(texto);
+            }
+
+            @Override
+            public void insertUpdate(DocumentEvent e) {
+                aoMudar();
+            }
+
+            @Override
+            public void removeUpdate(DocumentEvent e) {
+                aoMudar();
+
+            }
+
+            @Override
+            public void changedUpdate(DocumentEvent e) {
+                aoMudar();
+
+            }
+
+
+
+        });
+
+        listFornecedores.addKeyListener(new KeyAdapter() {
+
+            @Override
+            public void keyPressed(KeyEvent e) {
+
+                if (e.getKeyCode() == KeyEvent.VK_ENTER) {
+
+                    Fornecedor fornecedor = listFornecedores.getSelectedValue();
+
+                    if (fornecedor != null) {
+                        selecionarFornecedor(fornecedor);
+                    }
+                }
+            }
+        });
+
+        listFornecedores.addMouseListener(new MouseAdapter() {
+
+            @Override
+            public void mouseClicked(MouseEvent e) {
+
+                if (e.getClickCount() == 1) {
+
+                    Fornecedor fornecedor = listFornecedores.getSelectedValue();
+
+                    if (fornecedor != null) {
+                        selecionarFornecedor(fornecedor);
+                    }
+                }
+            }
+        });
     }
+
+    private void buscarFornecedor(String trecho){
+
+        if (trecho.length() < 3){
+            return;
+        }
+
+        FornecedorDAO fdao = new FornecedorDAO();
+
+        try {
+            List<Fornecedor> fornecedores = fdao.ListaFornecedores(con, trecho);
+
+            modelFornecedores.clear();
+
+            for (Fornecedor f : fornecedores){
+                modelFornecedores.addElement(f);
+            }
+            if (modelFornecedores.isEmpty()){
+                popUpFornecedor.setVisible(false);
+            }else {
+                popUpFornecedor.setPopupSize(tfFornecedor.getWidth(), 90);
+                popUpFornecedor.show(tfFornecedor, 0, tfFornecedor.getHeight());;
+            }
+            tfFornecedor.requestFocusInWindow();
+
+        }catch (SQLException e){
+            e.printStackTrace();
+            popUpFornecedor.setVisible(false);
+        }
+
+    }
+
+    private void listarEmpresas(){
+
+        EmpresaDAO edao = new EmpresaDAO();
+        System.out.println("ENTROU NO METODO listarEmpresas");
+
+        try {
+            List<Empresa> empresas = edao.listaEmpresas(con);
+
+            modelEmpresas.removeAllElements();
+
+            for (Empresa e : empresas){
+                modelEmpresas.addElement(e);
+            }
+        }catch (SQLException e){
+            e.printStackTrace();
+        }
+
+        cbEmpresaOrigem.setModel(modelEmpresas);
+
+    }
+
+    private void selecionarFornecedor (Fornecedor fornecedor){
+        tfFornecedor.setText(fornecedor.nome());
+        tfEmailFornecedor.setText(fornecedor.email());
+        popUpFornecedor.setVisible(false);
+    }
+
+
 
 
         private void escolherPlanilha(){
             JFileChooser fileChooser = new JFileChooser();
             fileChooser.setDialogTitle("Selecione a planilha");
+            FileNameExtensionFilter filtro = new FileNameExtensionFilter("Planilhas excel", "XLSX", "XLS");
+            fileChooser.addChoosableFileFilter(filtro);
+            fileChooser.setFileFilter(filtro);
 
             int resultado  =  fileChooser.showOpenDialog(this);
 
@@ -219,9 +416,13 @@ public class PedCompraMainFrame extends JFrame {
     private void processarFormulario() {
 
         String fornecedor = tfFornecedor.getText().trim();
-        String empresaOrigem = tfEmpresaOrigem.getText().trim();
+        String empresaOrigem = cbEmpresaOrigem.toString().trim();
         String caminhoPlanilha = tfCaminhoPlanilha.getText().trim();
         String emailFornecedor = tfEmailFornecedor.getText().trim();
+
+        Path caminho = Path.of(caminhoPlanilha);
+        ExcelReader.produto(caminho);
+
 
         //Validação simples
         if (fornecedor.isEmpty()){
@@ -270,6 +471,7 @@ public class PedCompraMainFrame extends JFrame {
         );
         lbStatus.setText(mensagem);
     }
+
 
 }
 

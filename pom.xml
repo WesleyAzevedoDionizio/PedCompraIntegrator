@@ -20,6 +20,17 @@
              <artifactId>flatlaf</artifactId>
              <version>3.5.2</version>
          </dependency>
+         <dependency>
+             <groupId>org.firebirdsql.jdbc</groupId>
+             <artifactId>jaybird</artifactId>
+             <version>5.0.6.java11</version>
+         </dependency>
+
+         <dependency>
+             <groupId>org.apache.poi</groupId>
+             <artifactId>poi-ooxml</artifactId>
+             <version>5.2.5</version>
+         </dependency>
      </dependencies>
 
 </project>
