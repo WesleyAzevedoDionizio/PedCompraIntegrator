@@ -55,7 +55,7 @@ public class Main {
         try {
             EcoDbConfig config = EcoConfigIni.load(iniPath);
 
-            Connection connection = EcoDbConnector.connect(config, "SYSDBA", "masterkey");
+            Connection connection = EcoDbConnector.connect(config, "******", "*********");
             System.out.println("Conectado ao firebird");
 
             // SwingUtilities.invokeLater:
